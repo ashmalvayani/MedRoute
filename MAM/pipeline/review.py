@@ -1,0 +1,28 @@
+def get_review_prompt(ques,record):
+    prompt = f'''
+    Input: You're a medical assistant. Please check whether the answer to this question is reasonable, if it is, please answer "yes", if not, please answer "no"
+
+    Question: {ques}.
+
+    Answer: {record}
+    '''
+
+    return prompt
+
+def review_all(question, file_name, modality_type, type_name, result_diagnosis):
+    from model.language_model import MedicalAssistant
+    assistant = MedicalAssistant()
+    query = get_review_prompt(question, result_diagnosis)
+    if modality_type == 'image':
+        output = assistant.generate_response(query, image_path=file_name)
+    elif modality_type == 'audio':
+        from model.audio_model import AudioChatbot
+        bot = AudioChatbot()
+        output = bot.chat(audio=file_name, text=query)
+    elif modality_type == 'video':
+        from model.video_model import VideoLLaMAChatbot
+        bot = VideoLLaMAChatbot()
+        output = bot.chat(paths=file_name, text=query, modal_type='video')
+    elif modality_type == 'text':
+        output = assistant.generate_response(query)
+    return output

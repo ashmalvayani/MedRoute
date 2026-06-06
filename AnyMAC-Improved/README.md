@@ -1,0 +1,311 @@
+# AnyMAC-Improved
+
+The core MedRoute multi-agent routing implementation. Introduces dynamic specialist prompting and dynamic specialist pools on top of a learned routing transformer trained via GRPO. All advanced features are togglable via CLI flags.
+
+## Key Strategies
+
+### 1. Dynamic Specialist Prompts
+
+**Problem:** With a static role description per specialist (e.g., "You are a cardiologist...") that's the same regardless of the question, all 60 specialists are effectively the same LLM (Qwen3-8B) with generic prompts → routing decisions have minimal impact on answer quality → router has no useful signal to learn from.
+
+**Solution:** Before each specialist consultation, we call a prompt-generation model to produce **question-specific guidance**. The model analyzes the medical question and the specialist's role, then produces targeted instructions like: *"Focus on disulfide bond cleavage in mucin proteins and the role of N-acetylcysteine in COPD management."*
+
+**Key design choices:**
+1. **Never say "outside your expertise"** — every specialist can contribute useful reasoning. Frame the question through their lens.
+2. **Be specific** — reference actual values, symptoms, and findings from the question. No generic advice.
+3. **Specialist names in hints** — receiving specialists see "Cardiologist: ..." instead of "Agent 1: ..." so they can weigh opinions by relevance.
+4. **Prompt model flexibility** — `--prompt_model` flag allows using Qwen3-8B (faster, same endpoint) or Qwen3-32B (better quality, separate endpoint) for prompt generation.
+
+### 2. Dynamic Specialist Pool
+
+**Problem:** The fixed pool of 60 generic specialists leads to routing collapse — the router memorizes a few "safe" indices (e.g., 99.1% Neurologist first hop) regardless of the question. Most specialists are never selected.
+
+**Solution:** Instead of routing over 60 fixed specialists, a judge model (Qwen3-32B) generates **5-7 question-specific specialists** per question. The router then selects `max_routing` specialists from this small, curated pool.
+
+**Key design choices:**
+1. **Question-specific roles** — e.g., "Pediatric Hematologist" for a sickle cell question, not generic "Hematologist"
+2. **Tailored descriptions** — each specialist gets a 2-3 sentence briefing specific to the question
+3. **On-the-fly embeddings** — role embeddings computed from generated descriptions, not memorized indices
+4. **Panel caching** — same question always gets the same panel (cached by question hash)
+
+**Implementation:**
+- `GDesigner/prompt/dynamic_prompt.py` — Async prompt generator + panel generator with in-memory caching
+- `GDesigner/agents/analyze_agent.py` — Uses dynamic prompt as system prompt when enabled
+- `GDesigner/graph/graph.py` — Dynamic pool integration: on-the-fly embeddings, routing, gradient replay
+- Fallback: returns the original static description / fixed pool on any error
+
+---
+
+## Results
+
+MedQA test set: 1,273 questions. Training: 300 samples, 16 traces, lr=3e-5, GS τ=1.0, entropy_beta=0.05, decay=0.98, batch=8.
+Eval: eval_temperature=0.7 (softmax routing), LLM temp=0 (greedy).
+
+### Routing Collapse (Fixed)
+
+Earlier results (62-64%) using `cos_scaling=1e3` at eval suffered from **hard argmax** → all 1,273 questions routed to the same 2-3 specialists. Verified on HF: τ=1.0 epoch2 had only **2 unique routing paths** for 1,273 questions. Those numbers are **not meaningful** — the router wasn't actually routing.
+
+**Fix:** Entropy regularization (training) + temperature-scaled softmax sampling (eval). With eval_temp=0.7: **189 unique routes per 200 questions**.
+
+### Main Results
+
+| Experiment | Base Model | Prompt/Pool Model | Epochs | Accuracy | Notes |
+|---|---|---|---|---|---|
+| Entropy fix baseline | Qwen3-8B | — | 1 | 61.51% | True baseline with proper routing |
+| Dynamic prompts (8B prompt gen) | Qwen3-8B | Qwen3-8B | 1 | 60.02% | Self-prompting hurts — worse than no prompts |
+| Dynamic prompts | Qwen3-8B | Qwen3-32B | 1 | 67.63% | +6.12pp over baseline |
+| Dynamic prompts + SC (3 rollouts) | Qwen3-8B | Qwen3-32B | 1 | 71.25% | Majority vote over 3 routing paths |
+| Dynamic pool + prompts | Qwen3-8B | Qwen3-32B | 1 | 71.48% | +9.97pp over baseline (seed=99) |
+| **Dynamic pool + prompts (32B consistent)** | **Qwen3-32B** | **Qwen3-32B** | **1** | **75.49%** | **Best result — 32B for everything** |
+
+*Best single-pass: 75.49% (32B epoch 1). Best 8B: 71.48% (epoch 1, seed=99).*
+
+### Multi-Epoch Training (Dynamic Pool, 32B Consistent)
+
+| Epoch | 32B Consistent |
+|---|---|
+| 1 | **75.49%** |
+| 2 | 71.01% |
+| 3 | 74.78% |
+| 4 | 68.74% |
+| 5 | 75.26% |
+| 6 | 68.81% |
+| 7 | 69.76% |
+| 8 | 75.10% |
+| 9 | 69.05% |
+| 10 | 73.37% |
+
+**Best: 32B = 75.49% (epoch 1), 8B = 71.48% (epoch 1, seed=99)**
+
+32B peaks at epoch 1 and maintains 74-75% at epochs 3, 5, 8. 8B achieves 71.48% at epoch 1 with seed=99 (vs 69.05% with seed=42), showing sensitivity to training sample selection. Additional training does not consistently improve; epoch 1 is the recommended checkpoint for both configurations.
+
+### Self-Consistency Analysis
+
+| Method | Single Pass | SC (3 rollouts) | Δ |
+|---|---|---|---|
+| Plain Qwen3-8B (no routing) | ~59.5% | 68.66% | +9.2pp |
+| MedRoute (dynamic prompts, fixed pool) | 67.63% | 71.25% | +3.62pp |
+| MedRoute (dynamic pool + prompts) | 69.68% | 67.95% | -1.73pp |
+
+SC works well with the **fixed 60-specialist pool** because routing is stable — the router has memorized strong preferences, so rollouts pick nearly identical teams and SC smooths out LLM response noise.
+
+SC **does not help** the **dynamic pool** because 97.3% of questions get different specialist teams across rollouts. With only 5-7 specialists in the pool, different routing combinations give very different results → majority vote amplifies routing noise rather than correcting answer errors.
+
+### Prompt Model Quality (Inference-Time Knowledge Distillation)
+
+Using Qwen3-8B for prompt generation (same model that answers) **hurts accuracy** (-1.5pp vs no prompts at 60.02%). The 8B generates misleading guidance that reinforces its own blind spots — if the 8B doesn't recognize a question is about Goodpasture syndrome, its self-generated prompt won't mention anti-GBM antibodies either.
+
+The 32B acts as a **clinical supervisor**: it doesn't answer the question, but tells the 8B *what to focus on*. This is a form of **inference-time knowledge distillation** — the 32B's superior clinical reasoning is used only for lightweight prompt/pool generation (cached per question), while the 8B handles the heavier specialist reasoning across multiple rollouts.
+
+The 32B-consistent experiment (75.49%) further validates this: when the same strong model both generates guidance and reasons as specialists, the full pipeline benefits from consistent high-quality reasoning at every stage.
+
+---
+
+## Usage
+
+```bash
+# Dynamic pool + dynamic prompts, 32B consistent (best config)
+bash scripts/train_dynamic_pool_32b.sh
+
+# Dynamic pool + dynamic prompts, 8B base + 32B judge
+bash scripts/train_dynamic_pool.sh
+
+# Dynamic prompts only, fixed 60-specialist pool (best SC config)
+bash scripts/train_improved_medqa.sh
+
+# Dynamic prompts with Qwen3-8B for prompt generation
+bash scripts/train_improved_medqa.sh --prompt_model Qwen/Qwen3-8B
+
+# No improvements (baseline with entropy fix only)
+bash scripts/train_improved_medqa.sh --no-dynamic
+```
+
+### Locked Hyperparameters
+
+| Parameter | Value |
+|-----------|-------|
+| train_num | 300 |
+| num_traces | 16 |
+| max_routing | 3 |
+| lr | 3e-5 |
+| GS tau | 1.0 |
+| LLM temp | 0.0 |
+| decay | 0.98 |
+| batch_size | 8 |
+| entropy_beta | 0.05 |
+| eval_temperature | 0.7 |
+| epochs | 1-10 |
+
+### Direct Python usage
+
+```bash
+# Train + eval with dynamic prompts (32B prompt gen)
+python experiments/run_medqa.py \
+    --llm_name Qwen/Qwen3-8B \
+    --judge_model Qwen/Qwen3-32B \
+    --dynamic_prompts \
+    --epochs 1 --train_num 300 --lr 3e-5
+
+# Train + eval with dynamic prompts (8B prompt gen)
+python experiments/run_medqa.py \
+    --llm_name Qwen/Qwen3-8B \
+    --judge_model Qwen/Qwen3-32B \
+    --dynamic_prompts --prompt_model Qwen/Qwen3-8B \
+    --epochs 1 --train_num 300 --lr 3e-5
+
+# Self-consistency eval
+python experiments/eval_self_consistency_routed.py \
+    --model_path <checkpoint.pth> \
+    --dynamic_prompts --judge_model Qwen/Qwen3-32B \
+    --num_rollouts 3 --eval_temperature 0.7 --parallelism 256
+```
+
+## Key Fixes
+
+1. **Routing collapse** — entropy regularization + eval_temperature replaces cos_scaling=1e3 argmax
+2. **Dynamic prompts** — question-specific guidance replaces generic role descriptions
+3. **Dynamic specialist pool** — question-specific 5-7 specialist panel replaces fixed 60 specialists
+4. **Specialist names in hints** — "Cardiologist: ..." instead of "Agent 1: ..."
+5. **Prompt model flexibility** — `--prompt_model` flag to use 8B or 32B for prompt generation
+
+## File Layout
+
+### New files
+- `GDesigner/prompt/dynamic_prompt.py` — Dynamic prompt + panel generator
+- `GDesigner/reward/__init__.py` + `partial_credit.py` — Partial credit reward (not used in best config)
+- `GDesigner/hints/__init__.py` + `structured_hints.py` — Structured hint parser (not used in best config)
+- `scripts/train_improved_medqa.sh` — Training script (dynamic prompts)
+- `scripts/train_dynamic_pool.sh` — Training script (dynamic pool + prompts, 8B base)
+- `scripts/train_dynamic_pool_32b.sh` — Training script (dynamic pool + prompts, 32B consistent)
+- `experiments/eval_self_consistency_routed.py` — SC evaluation
+- `experiments/smoke_test_dynamic_pool.py` — Panel generation smoke test
+
+### Modified files
+- `GDesigner/agents/analyze_agent.py` — Dynamic prompt integration + prompt_model support + dynamic_description
+- `GDesigner/graph/graph.py` — Entropy regularization, eval_temperature, dynamic pool, specialist names in hints
+- `GDesigner/prompt/medqa_prompt_set.py` — Graceful handling of unknown roles (dynamic pool)
+- `experiments/run_medqa.py` — New CLI flags (`--dynamic_prompts`, `--dynamic_pool`, `--prompt_model`)
+- `experiments/train_medqa.py` — Dynamic pool gradient replay support
+
+---
+
+## PMC-VQA (Vision)
+
+Medical Visual Question Answering on the PMC-VQA dataset (2,000 test questions, 4-option MCQ). The challenge: the GNN router is text-only, but questions require visual understanding of medical images.
+
+### Pipeline Architecture
+
+- **Agent Model:** Qwen3.5-9B (VLM) — specialists see the actual image + question + options
+- **Pool/Prompt/Judge Model:** Qwen3.6-27B (VLM) — generates specialist panels and dynamic prompts, sees the image
+- **Router:** GNN with transformer — text-only embeddings (MiniLM), or text + image embeddings (SigLIP)
+- **Training:** 300 train samples, 16 traces, lr=1e-5, max_routing=3, 1 epoch, entropy_beta=0.05
+
+### Approaches
+
+**1. Baseline — Zero-shot VLM:** Qwen3.5-9B direct inference (no routing, no specialists).
+
+**2. Caption-as-Proxy for Routing:** The GNN router is text-only, so we generate captions from medical images using a VLM and embed `caption + question` as the router input. Specialists (VLM agents) still see the actual image. Tested with three caption models:
+- **9B captions** (Qwen3.5-9B) — default, same model as the agent
+- **27B captions** (Qwen3.6-27B) — better quality, richer clinical descriptions
+- **122B captions** (Qwen3.5-122B-A10B, MoE with 10B active) — more verbose but less visually precise, hurt routing
+
+**3. Panel Variations:**
+- **Detailed panel** — specific sub-specialty titles ("Pediatric Neuroradiologist") → unstable GNN embeddings
+- **Simple panel** — broad specialty titles ("Radiologist") → stable embeddings, better accuracy. Made default.
+
+**4. Hint Ablation:**
+- **With hints** — specialists see previous specialists' outputs → better accuracy
+- **No hints** — specialists reason independently → worse accuracy (60.50%)
+
+**5. DM Chain-of-Thought:** Decision Maker reasons step-by-step before outputting `ANSWER: X` instead of a single letter. Forces explicit reasoning.
+
+**6. Image Embedding Routing:** Replace lossy text captions with SigLIP (google/siglip-so400m-patch14-384) image embeddings (1152-dim) concatenated with MiniLM text embeddings (384-dim) as the GNN router input. Eliminates caption generation and provides richer visual features.
+
+**7. L2 Normalization:** SigLIP embeddings (1152-dim, magnitude 0-50+) were dominating MiniLM text embeddings (384-dim, L2-normalized ~1.0) in the projection layer. L2-normalizing both before concatenation balances text and image modalities.
+
+**8. Higher Entropy (beta=0.15):** Increase entropy regularization to encourage specialist exploration. The router was collapsing to 83% Pulmonologist as first choice.
+
+**9. Min Routing Depth 3:** Force every question to consult 3 specialists before the Decision Maker answers. Eliminates depth-0 shortcuts (58.5% accuracy).
+
+**10. Cross-Attention Fusion:** Instead of concatenating text and image embeddings, project each into the transformer hidden space separately, then use 8-head MultiheadAttention where text queries attend to image keys/values. Learns a more expressive text-image alignment than concatenation.
+
+**11. Caption + Image Fusion:** Combine all three signals — text question embedding (384-dim) + caption embedding (384-dim) + SigLIP image embedding (1152-dim) = 1920-dim input. Hypothesis: captions provide semantic understanding while image embeddings provide raw visual features. Result: the high-dimensional input was harder to learn with 300 training samples.
+
+### Results
+
+| # | Experiment | Caption Model | Router Input | Key Change | Regex Acc | Judge Acc |
+|---|-----------|---------------|-------------|------------|-----------|-----------|
+| 1 | Zero-shot 9B | — | — | No routing, direct VLM | 60.70% | — |
+| 2 | Dynamic pool + prompts (no hints) | 27B | Caption + question | Hints disabled | 60.50% | 60.50% |
+| 3 | Dynamic pool + prompts (27B, detailed panel) | 27B | Caption + question | Specific sub-specialty titles | 62.05% | 62.05% |
+| 4 | Dynamic pool + prompts (27B, simple panel) | 27B | Caption + question | Broad specialty titles | 62.65% | 62.60% |
+| 5 | + DM CoT (27B captions) | 27B | Caption + question | DM reasons before answering | 63.20% | 63.15% |
+| 6 | + DM CoT (122B captions) | 122B (MoE) | Caption + question | Larger caption model | 61.80% | 61.80% |
+| 7 | Image embeddings (SigLIP) | — | SigLIP + question | Replace captions with embeddings | 63.50% | 63.45% |
+| 8 | + L2 normalization | — | SigLIP + question | Normalize before concatenation | **64.05%** | **64.00%** |
+| 9 | + Higher entropy (0.15) | — | SigLIP + question | More specialist exploration | 63.50% | 63.35% |
+| 10 | + Min routing depth 3 | — | SigLIP + question | Force 3 specialist consultations | 63.85% | 63.75% |
+| 11 | Cross-attention fusion | — | SigLIP ⊗ question | Text attends to image (8-head MHA) | 64.05% | 64.00% |
+| 12 | Caption + Image fusion | 27B | Caption + SigLIP + question | All three signals concatenated | 63.10% | 63.20% |
+| 13 | Seed ablation (seed=42) | — | SigLIP + question | Different training sample selection | 62.80% | 62.90% |
+
+### Routing Depth Analysis (Experiment #5)
+
+| Depth | Samples | % of Total | Accuracy |
+|-------|---------|-----------|----------|
+| 0 (DM only) | 130 | 6.5% | 58.5% |
+| 1 | 506 | 25.3% | 60.5% |
+| 2 | 484 | 24.2% | 63.2% |
+| 3 (max, forced DM) | 880 | 44.0% | 66.0% |
+
+Deeper routing consistently improves accuracy. Depth-0 (DM answers without consulting any specialist) is the worst bucket at 58.5%, motivating the min routing depth experiments.
+
+### Specialist Usage (Experiment #5)
+
+The router heavily favored Pulmonologist (83% as first choice), indicating the GNN hadn't learned to differentiate specialist selection based on question content. This motivated the higher entropy experiment.
+
+### Vision Encoder Ablation
+
+All encoders use L2-normalized concatenation with MiniLM text embeddings (384-dim). Same config: seed=99, 300 train samples, 16 traces, lr=1e-5, entropy_beta=0.05.
+
+| Encoder | Embedding Dim | Regex Acc | Judge Acc |
+|---------|--------------|-----------|-----------|
+| **SigLIP** (google/siglip-so400m-patch14-384) | 1152 | **64.05%** | **64.00%** |
+| DINOv2 (facebook/dinov2-large) | 1024 | 63.55% | 63.60% |
+| BiomedCLIP (microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224) | 512 | 63.20% | 62.95% |
+| CLIP (openai/clip-vit-large-patch14-336) | 1024 | 63.15% | 62.75% |
+
+SigLIP leads, but all encoders are within ~1pp. Notably, the domain-specific BiomedCLIP (trained on PubMed biomedical images) did not outperform general-purpose encoders, suggesting the routing signal comes more from visual structure than domain-specific features. DINOv2 (self-supervised, no text alignment) performs comparably to the CLIP-family models, indicating text-image alignment in the encoder is not critical when the router already has a separate text embedding branch.
+
+### Key Findings
+
+1. **Image embeddings > text captions** for routing — SigLIP embeddings with L2 normalization (64.05%) outperform 27B captions (63.20%) while being faster (no caption generation needed)
+2. **Vision encoder choice matters less than expected** — SigLIP (64.05%), DINOv2 (63.55%), BiomedCLIP (63.20%), CLIP (63.15%) are all within ~1pp; the routing benefit is largely encoder-agnostic
+3. **27B captions > 9B captions > 122B captions** — 27B hits the sweet spot; 122B MoE (61.80%) was worse than 27B (63.20%), likely due to verbosity diluting key visual features in the embedding
+4. **DM CoT helps** — chain-of-thought reasoning (+0.55pp over simple panel baseline) by forcing explicit reasoning before answering
+5. **Deeper routing = better accuracy** — consistent improvement from depth 0 (58.5%) to depth 3 (66.0%); forcing min depth 3 gives +0.35pp
+6. **L2 normalization is critical** — SigLIP embeddings (magnitude 0-50+) dominate MiniLM text (L2-normalized ~1.0) without normalization; L2-normalizing both gives +0.55pp (63.50% → 64.05%)
+7. **Higher entropy doesn't help** — increasing entropy_beta from 0.05 to 0.15 didn't improve accuracy despite router collapse to 83% Pulmonologist
+8. **Cross-attention ties with concat** — 8-head MultiheadAttention (64.05%) matches L2-normalized concatenation despite more parameters; with only 300 training samples, the added expressivity doesn't translate to gains
+9. **Adding captions to image embeddings hurts** — caption+image fusion (63.10%) is worse than image embeddings alone (64.05%); the 1920-dim input is too high-dimensional for the small training set, and the caption signal is redundant with the image embedding
+10. **Seed sensitivity** — seed=99 (64.05%) outperforms seed=42 (62.80%) by 1.25pp, consistent with MedQA seed sensitivity (69.05% vs 71.48%)
+11. **Simple panel outperforms detailed** — broad specialist titles ("Radiologist") produce more stable GNN embeddings than specific sub-specialties ("Pediatric Neuroradiologist") — 62.65% vs 62.05%
+12. **Hints matter** — disabling hint passing between specialists drops accuracy from 62.65% to 60.50% (-2.15pp)
+13. **Caption model quality matters more than size** — the 27B model produces concise, clinically focused descriptions; the 122B MoE produces lengthy descriptions that dilute the embedding signal
+14. **Domain-specific encoders don't help routing** — BiomedCLIP (trained on PubMed images) underperforms general-purpose SigLIP, suggesting routing benefits from visual structure features rather than biomedical domain knowledge
+
+---
+
+## Cross-Dataset Comparison
+
+| Configuration | MedQA | PubMedQA |
+|---|---|---|
+| **Baselines** | | |
+| Qwen3-8B zero-shot | 59.50% | 50.00% |
+| MAM (Qwen3-8B + 32B rolegen) | 63.24% | 44.10% |
+| **MedRoute (1 epoch)** | | |
+| Static pool, no dynamic prompts | 61.51% | 41.70% |
+| Static pool + dynamic prompts | 67.63% | 53.00% |
+| Dynamic pool + prompts (seed=42) | 69.05% | 53.70% |
+| Dynamic pool + prompts (seed=99) | **71.48%** | **55.10%** |
+| **Improvement over zero-shot** | **+11.98%** | **+5.10%** |

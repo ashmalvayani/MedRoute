@@ -1,0 +1,36 @@
+venv/
+__pycache__/
+*.pyc
+*.pth
+*.pt
+*.bin
+*.egg-info/
+.env
+result/
+logs/
+nohup.out
+
+# PMC-VQA images, raw data, and caption caches
+AnyMAC-Improved/datasets_my/PMC-VQA/data/PMC-VQA/
+AnyMAC-Improved/datasets_my/PMC-VQA/data/captions/
+AnyMAC-Improved/datasets_my/PMC-VQA/raw/
+AnyMAC-Improved/datasets_my/PMC-VQA/data/image_embeddings/
+
+# Dataset payloads — folder structure is tracked via .gitkeep + README; data is not
+AnyMAC-Improved/datasets_my/MedQA/data/**/*.csv
+AnyMAC-Improved/datasets_my/MedQA/data/**/*.json
+AnyMAC-Improved/datasets_my/PubMedQA/data/**/*.csv
+AnyMAC-Improved/datasets_my/PubMedQA/data/**/*.json
+AnyMAC-Improved/datasets_my/btmri/*.json
+AnyMAC-Improved/datasets_my/btmri/image_embeddings/
+AnyMAC-Improved/datasets_my/ChestXray8/data/**/*.csv
+AnyMAC-Improved/datasets_my/ChestXray8/data/**/*.json
+AnyMAC-Improved/datasets_my/ChestXray8/data/image_embeddings/
+AnyMAC-Improved/datasets_my/DeepLesion/data/*.json
+AnyMAC-Improved/datasets_my/DeepLesion/data/image_embeddings/
+AnyMAC-Improved/datasets_my/MedMCQA/*.json
+AnyMAC-Improved/datasets_my/MedMCQA/data/**/*.csv
+AnyMAC-Improved/datasets_my/PathVQA/data/*.json
+AnyMAC-Improved/datasets_my/PathVQA/data/image_embeddings/
+AnyMAC-Improved/datasets_my/PMC-VQA/data/*.csv
+AnyMAC-Improved/datasets_my/PMC-VQA-Test/*.json

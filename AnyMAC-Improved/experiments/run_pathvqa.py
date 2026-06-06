@@ -1,0 +1,431 @@
+"""
+AnyMAC-Improved: PathVQA router training and evaluation (Medsets open QA).
+
+Router uses CSV captions + question (Medsets column); VLMs see image + question.
+Training/eval judges use YES/NO equivalence vs reference answers (see train_pmcvqa / evaluate_pmcvqa).
+"""
+
+from __future__ import annotations
+
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.stdout.reconfigure(encoding="utf-8")
+
+import argparse
+from pathlib import Path
+
+from typing import Union, Literal, List
+import random
+import numpy as np
+import torch
+import time
+
+from GDesigner.graph.graph import Graph
+from datasets_my.pathvqa_dataset import PathVQADataset
+from GDesigner.prompt.pathvqa_prompt_set import SPECIALISTS
+from GDesigner.utils.const import GDesigner_ROOT
+from GDesigner.utils.globals import Time
+
+from experiments.train_pmcvqa import train
+from experiments.evaluate_pmcvqa import evaluate
+
+
+def _apply_llm_temperature(llm_temperature: float | None):
+    if llm_temperature is not None:
+        from GDesigner.llm.llm import LLM
+        LLM.DEFAULT_TEMPERATURE = llm_temperature
+        print(f"[config] LLM generation temperature set to {llm_temperature}")
+
+
+def _apply_improvements(args):
+    if getattr(args, "dynamic_prompts", False):
+        import GDesigner.agents.analyze_agent as aa
+        aa.DYNAMIC_PROMPTS_ENABLED = True
+        aa.JUDGE_MODEL_FOR_PROMPTS = args.judge_model
+        if getattr(args, "prompt_model", None):
+            aa.PROMPT_MODEL_FOR_PROMPTS = args.prompt_model
+            print(f"[improved] Dynamic specialist prompts ENABLED (prompt_model={args.prompt_model} on BASE_URL)")
+        else:
+            print(f"[improved] Dynamic specialist prompts ENABLED (judge={args.judge_model})")
+
+    if getattr(args, "partial_credit", False):
+        import experiments.train_pmcvqa as tp
+        tp.PARTIAL_CREDIT_ENABLED = True
+        tp.REWARD_ALPHA = getattr(args, "reward_alpha", 0.4)
+        print(f"[improved] Partial credit rewards ENABLED (alpha={tp.REWARD_ALPHA})")
+
+    if getattr(args, "structured_hints", False):
+        import GDesigner.graph.graph as gg
+        gg.STRUCTURED_HINTS_ENABLED = True
+        print("[improved] Structured hint passing ENABLED")
+
+    if getattr(args, "dynamic_pool", False):
+        import GDesigner.graph.graph as gg
+        gg.DYNAMIC_POOL_ENABLED = True
+        gg.DYNAMIC_POOL_JUDGE_MODEL = args.judge_model
+        print(f"[improved] Dynamic specialist pool ENABLED (judge={args.judge_model})")
+
+    if getattr(args, "no_hints", False):
+        import GDesigner.graph.graph as gg
+        gg.NO_HINTS = True
+        print("[improved] Hint chains DISABLED — specialists reason independently")
+
+    if getattr(args, "dm_cot", False):
+        import GDesigner.prompt.pmcvqa_prompt_set as ps
+        ps.DM_COT = True
+        print("[improved] DM chain-of-thought ENABLED — DM reasons before answering")
+
+
+def build_graph(args):
+    domain = args.domain
+
+    roles = SPECIALISTS
+    if getattr(args, "top_k_specialists", None) is not None:
+        roles = SPECIALISTS[: args.top_k_specialists]
+        print(f"Using top {args.top_k_specialists} specialists: {roles}")
+
+    use_img_emb = getattr(args, "use_image_embeddings", False)
+    img_emb_dim = 0
+    if use_img_emb:
+        from GDesigner.llm.image_embedding import get_embedding_dim
+
+        vision_encoder = getattr(args, "vision_encoder", None)
+        img_emb_dim = get_embedding_dim(vision_encoder)
+        print(f"[image_embed] Using image embeddings (dim={img_emb_dim}) for routing")
+
+    graph = Graph(
+        domain=domain,
+        llm_name=args.llm_name,
+        agent_names=args.agent_names,
+        decision_method=args.decision_method,
+        optimized_spatial=args.optimized_spatial,
+        optimized_temporal=args.optimized_temporal,
+        use_transformer=True,
+        max_routing=args.max_routing,
+        available_roles=roles,
+        use_image_embeddings=use_img_emb,
+        image_embedding_dim=img_emb_dim,
+        min_routing_depth=getattr(args, "min_routing_depth", 0),
+        fusion_mode=getattr(args, "fusion_mode", "concat"),
+    )
+    return graph
+
+
+def main():
+    p = argparse.ArgumentParser(description="AnyMAC-Improved PathVQA Router")
+
+    p.add_argument("--result_dir", type=str, default="result/pathvqa_img_embed")
+
+    p.add_argument(
+        "--mode",
+        type=str,
+        default="FullConnected",
+        choices=[
+            "DirectAnswer",
+            "FullConnected",
+            "Random",
+            "Chain",
+            "Debate",
+            "Layered",
+            "Star",
+            "Mesh",
+            "FakeFullConnected",
+            "FakeRandom",
+            "FakeChain",
+            "FakeStar",
+            "FakeMesh",
+            "FakeAGRandom",
+            "FakeAGFull",
+        ],
+    )
+    p.add_argument("--agent_names", nargs="+", type=str, default=["AnalyzeAgent"])
+    p.add_argument("--agent_nums", nargs="+", type=int, default=[1])
+    p.add_argument("--domain", type=str, default="pathvqa")
+
+    p.add_argument("--llm_name", type=str, default="Qwen/Qwen3.5-9B")
+    p.add_argument("--model_path", type=str, default=None)
+    p.add_argument("--finetune_path", type=str, default=None)
+    p.add_argument("--decision_method", type=str, default="FinalRefer")
+
+    p.add_argument("--num_rounds", type=int, default=1)
+
+    p.add_argument("--epochs", type=int, default=1)
+    p.add_argument("--lr", type=float, default=1e-5)
+    p.add_argument("--train_num", type=int, default=300)
+    p.add_argument("--training_samples", type=int, default=10**9)
+    p.add_argument("--num_traces", type=int, default=8)
+    p.add_argument("--required_correct_answers", type=int, default=1)
+
+    p.add_argument("--max_routing", type=int, default=3)
+    p.add_argument("--min_routing_depth", type=int, default=0)
+    p.add_argument("--temperature", type=float, default=0.7)
+    p.add_argument("--max_context", type=int, default=2048)
+    p.add_argument("--decay_factor", type=float, default=0.98)
+
+    p.add_argument("--reuse_time", type=int, default=1)
+    p.add_argument("--batch_size", type=int, default=8)
+    p.add_argument("--sparse_context", action="store_true")
+    p.add_argument("--cos_scaling", type=float, default=1.5)
+    p.add_argument("--eval_interval", type=int, default=100)
+
+    p.add_argument("--optimized_spatial", action="store_true")
+    p.add_argument("--optimized_temporal", action="store_true")
+    p.add_argument("--agent_group_type", type=str, default="AnalyzeAgent")
+
+    p.add_argument("--trace_parallelism", type=int, default=128)
+
+    p.add_argument("--judge_model", type=str, default="Qwen/Qwen3-32B")
+
+    p.add_argument("--resume_gradient_path", type=str, default=None)
+    p.add_argument("--early_stop_rollouts", action="store_true", default=False)
+    p.add_argument("--top_k_specialists", type=int, default=None)
+    p.add_argument("--zero_shot", action="store_true", default=False)
+
+    p.add_argument("--llm_temperature", type=float, default=None)
+
+    p.add_argument("--dynamic_prompts", action="store_true", default=False)
+    p.add_argument("--prompt_model", type=str, default=None)
+    p.add_argument("--partial_credit", action="store_true", default=False)
+    p.add_argument("--reward_alpha", type=float, default=0.4)
+    p.add_argument("--structured_hints", action="store_true", default=False)
+    p.add_argument("--dynamic_pool", action="store_true", default=False)
+    p.add_argument("--no_hints", action="store_true", default=False)
+    p.add_argument("--dm_cot", action="store_true", default=False)
+    p.add_argument("--dm_model", type=str, default=None)
+    p.add_argument("--entropy_beta", type=float, default=0.05)
+    p.add_argument("--eval_limit", type=int, default=2000)
+    p.add_argument("--eval_temperature", type=float, default=0.5)
+    p.add_argument("--seed", type=int, default=99)
+
+    p.add_argument("--train_json_path", type=str, default=None)
+    p.add_argument("--test_json_path", type=str, default=None)
+
+    p.add_argument("--caption_model", type=str, default="Qwen/Qwen3.5-9B")
+    p.add_argument("--train_samples", type=int, default=300)
+    p.add_argument("--skip_caption_gen", action="store_true", default=True)
+
+    p.add_argument("--use_image_embeddings", action="store_true", default=False)
+    p.add_argument("--vision_encoder", type=str, default="google/siglip-so400m-patch14-384")
+    p.add_argument(
+        "--fusion_mode",
+        type=str,
+        default="concat",
+        choices=["concat", "caption_image", "cross_attention"],
+    )
+
+    args = p.parse_args()
+
+    _apply_llm_temperature(args.llm_temperature)
+    _apply_improvements(args)
+
+    improvements = []
+    if args.dynamic_prompts:
+        improvements.append("dynamic_prompts")
+    if args.partial_credit:
+        improvements.append(f"partial_credit(alpha={args.reward_alpha})")
+    if args.structured_hints:
+        improvements.append("structured_hints")
+    if getattr(args, "dynamic_pool", False):
+        improvements.append("dynamic_pool")
+    if improvements:
+        print(f"[AnyMAC-Improved] Active: {', '.join(improvements)}")
+    else:
+        print("[AnyMAC-Improved] No improvements enabled (baseline mode)")
+
+    seed = args.seed
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    torch.use_deterministic_algorithms(True, warn_only=True)
+
+    current_time = Time.instance().value or time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
+    Time.instance().value = current_time
+    result_dir = Path(f"{GDesigner_ROOT}/{args.result_dir}")
+    result_dir.mkdir(parents=True, exist_ok=True)
+    result_file = result_dir / f"{args.domain}_{args.llm_name.replace('/', '-')}_{current_time}.json"
+
+    agent_names = [name for name, num in zip(args.agent_names, args.agent_nums) for _ in range(num)]
+    _ = get_kwargs(args.mode, len(agent_names))
+    limit_questions = getattr(args, "eval_limit", 2100)
+
+    print(f"[PathVQA] Loading datasets (seed={seed})...")
+    use_img_emb = getattr(args, "use_image_embeddings", False)
+    vision_encoder = getattr(args, "vision_encoder", None)
+
+    dataset_train = PathVQADataset(
+        split="train",
+        sample_n=args.train_samples,
+        seed=seed,
+        train_json_path=args.train_json_path,
+        test_json_path=args.test_json_path,
+        use_image_embeddings=use_img_emb,
+        vision_encoder=vision_encoder,
+    )
+    dataset_val = PathVQADataset(
+        split="test",
+        sample_n=limit_questions,
+        seed=seed,
+        train_json_path=args.train_json_path,
+        test_json_path=args.test_json_path,
+        use_image_embeddings=use_img_emb,
+        vision_encoder=vision_encoder,
+    )
+
+    print(f"Training Dataset Length: {len(dataset_train)}, Validation Dataset Length: {len(dataset_val)}")
+
+    graph = build_graph(args)
+    graph.entropy_beta = getattr(args, "entropy_beta", 0.05)
+    graph.eval_temperature = getattr(args, "eval_temperature", 0.5)
+    if getattr(args, "dm_model", None):
+        graph.dm_llm_name = args.dm_model
+        print(f"[improved] DM model override: {args.dm_model} (via JUDGE_BASE_URL)")
+    print(f"Graph Constructed (entropy_beta={graph.entropy_beta}, eval_temperature={graph.eval_temperature})")
+
+    if args.zero_shot:
+        print("Zero-shot evaluation with randomly initialized router.")
+        evaluate(
+            graph=graph,
+            dataset=dataset_val,
+            limit_questions=limit_questions,
+            result_file=result_file,
+            result_dir=result_dir,
+            args=args,
+        )
+    elif args.model_path:
+        print(f"Loading pre-trained router from: {args.model_path}")
+        graph = Graph.load_model(args.model_path)
+        graph.entropy_beta = getattr(args, "entropy_beta", 0.05)
+        graph.eval_temperature = getattr(args, "eval_temperature", 0.5)
+        if getattr(args, "dm_model", None):
+            graph.dm_llm_name = args.dm_model
+        print("Skipping training — running evaluation only.")
+        evaluate(
+            graph=graph,
+            dataset=dataset_val,
+            limit_questions=limit_questions,
+            result_file=result_file,
+            result_dir=result_dir,
+            args=args,
+        )
+    elif args.finetune_path:
+        print(f"Loading checkpoint for fine-tuning from: {args.finetune_path}")
+        graph = Graph.load_model(args.finetune_path)
+        print("Continuing training from checkpoint.")
+        train(graph=graph, dataset=dataset_train, result_dir=result_dir, args=args)
+        print("Fine-tuning complete. Running evaluation...")
+        evaluate(
+            graph=graph,
+            dataset=dataset_val,
+            limit_questions=limit_questions,
+            result_file=result_file,
+            result_dir=result_dir,
+            args=args,
+        )
+    else:
+        train(graph=graph, dataset=dataset_train, result_dir=result_dir, args=args)
+        print("Training complete.")
+
+
+def get_kwargs(
+    mode: Union[
+        Literal["DirectAnswer"],
+        Literal["FullConnected"],
+        Literal["Random"],
+        Literal["Chain"],
+        Literal["Debate"],
+        Literal["Layered"],
+        Literal["Star"],
+        Literal["Mesh"],
+        Literal["FakeFullConnected"],
+        Literal["FakeRandom"],
+        Literal["FakeChain"],
+        Literal["FakeStar"],
+        Literal["FakeMesh"],
+        Literal["FakeAGRandom"],
+        Literal["FakeAGFull"],
+    ],
+    N: int,
+):
+    initial_spatial_probability: float = 0.5
+    fixed_spatial_masks: List[List[int]] = None
+    initial_temporal_probability: float = 0.5
+    fixed_temporal_masks: List[List[int]] = None
+    node_kwargs = None
+
+    def generate_layered_graph(N, layer_num=2):
+        adj_matrix = [[0] * N for _ in range(N)]
+        base_size = N // layer_num
+        remainder = N % layer_num
+        layers = []
+        for i in range(layer_num):
+            size = base_size + (1 if i < remainder else 0)
+            layers.extend([i] * size)
+        random.shuffle(layers)
+        for i in range(N):
+            current_layer = layers[i]
+            for j in range(N):
+                if layers[j] == current_layer + 1:
+                    adj_matrix[i][j] = 1
+        return adj_matrix
+
+    def generate_mesh_graph(N):
+        adj_matrix = [[0] * N for _ in range(N)]
+        for i in range(0, N):
+            for j in range(i + 1, N):
+                adj_matrix[i][j] = 1
+        return adj_matrix
+
+    def generate_star_graph(N):
+        adj_matrix = [[0] * N for _ in range(N)]
+        for i in range(1, N):
+            adj_matrix[0][i] = 1
+        return adj_matrix
+
+    if mode == "DirectAnswer":
+        fixed_spatial_masks = [[0]]
+        fixed_temporal_masks = [[0]]
+        node_kwargs = [{"role": "Normal"}]
+    elif mode == "FullConnected" or mode == "FakeFullConnected" or mode == "FakeAGFull":
+        fixed_spatial_masks = [[1 if i != j else 0 for i in range(N)] for j in range(N)]
+        fixed_temporal_masks = [[1 for _ in range(N)] for _ in range(N)]
+    elif mode == "Random" or mode == "FakeRandom" or mode == "FakeAGRandom":
+        fixed_spatial_masks = [[random.randint(0, 1) if i != j else 0 for i in range(N)] for j in range(N)]
+        fixed_temporal_masks = [[random.randint(0, 1) for _ in range(N)] for _ in range(N)]
+    elif mode == "Chain" or mode == "FakeChain":
+        fixed_spatial_masks = [[1 if i == j + 1 else 0 for i in range(N)] for j in range(N)]
+        fixed_temporal_masks = [[1 if i == 0 and j == N - 1 else 0 for i in range(N)] for j in range(N)]
+    elif mode == "Debate":
+        fixed_spatial_masks = [[0 for i in range(N)] for j in range(N)]
+        fixed_temporal_masks = [[1 for i in range(N)] for j in range(N)]
+    elif mode == "Layered":
+        fixed_spatial_masks = generate_layered_graph(N)
+        fixed_temporal_masks = [[1 for i in range(N)] for j in range(N)]
+    elif mode == "Mesh" or mode == "FakeMesh":
+        fixed_spatial_masks = generate_mesh_graph(N)
+        fixed_temporal_masks = [[1 for i in range(N)] for j in range(N)]
+    elif mode == "Star" or mode == "FakeStar":
+        fixed_spatial_masks = generate_star_graph(N)
+        fixed_temporal_masks = [[1 for i in range(N)] for j in range(N)]
+
+    if "Fake" in mode and "AG" not in mode:
+        node_kwargs = [{"role": "Fake"} if i % 2 == N % 2 else {"role": "Normal"} for i in range(N)]
+    elif "Fake" in mode and "AG" in mode:
+        node_kwargs = [{"role": "Fake"} if i % 2 == N % 2 else {"role": None} for i in range(N)]
+
+    return {
+        "initial_spatial_probability": initial_spatial_probability,
+        "fixed_spatial_masks": fixed_spatial_masks,
+        "initial_temporal_probability": initial_temporal_probability,
+        "fixed_temporal_masks": fixed_temporal_masks,
+        "node_kwargs": node_kwargs,
+    }
+
+
+if __name__ == "__main__":
+    main()
