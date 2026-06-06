@@ -156,7 +156,7 @@ Superseded by #2 (Image Embedding Routing), which feeds visual features directly
 - **With hints** — specialists see previous specialists' outputs → better accuracy
 - **No hints** — specialists reason independently → worse accuracy (60.50%)
 
-**D. DM Chain-of-Thought:** Decision Maker reasons step-by-step before outputting `ANSWER: X` instead of a single letter. Forces explicit reasoning.
+**D. DM Chain-of-Thought:** Decision Maker reasons step-by-step before outputting `ANSWER: X` instead of a single letter. Forces explicit reasoning. **On by default for PMC-VQA, available (opt-in via `--dm_cot`) for PathVQA, present but inert for BTMRI / ChestX-ray8 / DeepLesion** (their prompt sets ignore the flag).
 
 **E. Higher Entropy (β=0.15):** Increase entropy regularization to encourage specialist exploration. The router was collapsing to 83% Pulmonologist as first choice. Final paper configuration kept the standard β=0.05.
 
