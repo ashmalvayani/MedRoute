@@ -3,6 +3,7 @@
 <p align="left">
    <a href="https://github.com/ashmalvayani/MedRoute/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-CC--BY--NC%204.0-blue" alt="license"></a>
    <a href="https://arxiv.org/abs/2604.06180"><img src="https://img.shields.io/badge/arXiv-Paper-b31b1b.svg" alt="paper"></a>
+   <a href="https://ashmalvayani.github.io/MedRoute/"><img src="https://img.shields.io/badge/Project-Page-87CEEB" alt="project page"></a>
 </p>
 
 [Ashmal Vayani](https://scholar.google.com/citations?user=K4KF1SwAAAAJ&hl=en&oi=ao)\*, [Parth Parag Kulkarni](https://scholar.google.com/citations?user=OHC7c90AAAAJ&hl=en)\*, [Joseph Fioresi](https://scholar.google.com/), [Song Wang](https://scholar.google.com/), [Mubarak Shah](https://scholar.google.com/citations?user=p8gsO3gAAAAJ&hl=en&oi=ao)
