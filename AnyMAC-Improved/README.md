@@ -69,7 +69,7 @@ bash scripts/train_improved_medqa.sh --no-dynamic
 | batch_size | 8 |
 | entropy_beta | 0.05 |
 | eval_temperature | 0.7 |
-| epochs | 1-10 |
+| epochs | 1 |
 
 ### Direct Python usage
 

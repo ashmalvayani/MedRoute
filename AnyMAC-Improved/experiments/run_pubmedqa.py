@@ -125,7 +125,7 @@ def main():
     p.add_argument('--num_rounds', type=int, default=1)
 
     # Router + training
-    p.add_argument("--epochs", type=int, default=10)
+    p.add_argument("--epochs", type=int, default=1)
     p.add_argument("--lr", type=float, default=1e-5)
     p.add_argument("--train_num", type=int, default=100)
     p.add_argument("--train_split", type=str, default="dev")
