@@ -1,188 +1,274 @@
+/* ============================================================
+   MedRoute project page — custom styling on top of Bulma
+   ============================================================ */
+
+:root {
+  --primary: #2c5282;
+  --primary-dark: #1a365d;
+  --primary-soft: rgba(44, 82, 130, 0.08);
+  --accent: #e53e3e;
+  --bg: #f7fafc;
+  --section-alt: #edf2f7;
+  --card: #ffffff;
+  --text: #1a202c;
+  --text-muted: #4a5568;
+  --border: #e2e8f0;
+  --shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 12px 30px rgba(15, 23, 42, 0.08);
+}
+
+/* ---- Base ---- */
 body {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
+a { color: var(--primary); }
+a:hover { color: var(--primary-dark); }
 
-.footer .icon-link {
-    font-size: 25px;
-    color: #000;
+/* ---- Hero ---- */
+.hero {
+  background: linear-gradient(135deg, #eef4fa 0%, #f7fafc 60%, #ffffff 100%);
+  border-bottom: 1px solid var(--border);
 }
-
-.link-block a {
-    margin-top: 5px;
-    margin-bottom: 5px;
-}
-
-.dnerf {
-  font-variant: small-caps;
-}
-
-
-.teaser .hero-body {
-  padding-top: 0;
-  padding-bottom: 3rem;
-}
-
-.teaser {
-  font-family: 'Google Sans', sans-serif;
-}
-
+.hero-body { padding: 4rem 1.5rem 3rem; }
 
 .publication-title {
-  margin-top: -20px;
-}
-
-.publication-banner {
-  max-height: parent;
-
-}
-
-.publication-banner video {
-  position: relative;
-  left: auto;
-  top: auto;
-  transform: none;
-  object-fit: fit;
-}
-
-.publication-header .hero-body {
-}
-
-.publication-title {
-    font-family: 'Google Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  font-size: 2.5rem !important;
+  margin-top: 0 !important;
+  margin-bottom: 1.5rem;
 }
 
 .publication-authors {
-    font-family: 'Google Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
+  font-size: 1.05rem;
+  margin-bottom: 0.5rem;
 }
-
-.publication-venue {
-    color: #555;
-    font-weight: bold;
-}
-
-.publication-awards {
-    color: #ff3860;
-    width: fit-content;
-    font-weight: bolder;
-}
-
-.publication-authors {
-}
-
 .publication-authors a {
-   color: hsl(204, 86%, 53%) !important;
+  color: var(--primary) !important;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
-
 .publication-authors a:hover {
-    text-decoration: underline;
+  border-bottom-color: var(--primary);
+  text-decoration: none;
+}
+.publication-authors:last-child {
+  color: var(--text-muted);
+  font-size: 0.95rem;
 }
 
-.author-block {
-  font-size: 17px;
-  display: inline-block;
+/* ---- Hero buttons (arXiv / Code / BibTeX) ---- */
+.publication-links { margin-top: 1.75rem; }
+.publication-links .button {
+  background: var(--primary) !important;
+  color: white !important;
+  border: none !important;
+  padding: 0 1.5rem;
+  height: 2.5rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  border-radius: 999px !important;
+  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.2s ease;
+  box-shadow: 0 2px 6px rgba(44, 82, 130, 0.20);
+}
+.publication-links .button:hover {
+  background: var(--primary-dark) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(44, 82, 130, 0.28);
+}
+.publication-links .link-block { margin: 0 0.3rem; }
+.publication-links .button .icon i { font-size: 1.05rem; }
+
+/* ---- Sections ---- */
+.section {
+  padding: 4rem 1.5rem;
+}
+.section + .section {
+  border-top: 1px solid var(--border);
 }
 
-.publication-banner img {
+/* Alternate sections marked via inline style background-color: #fafafa */
+section.section[style*="fafafa"] {
+  background: var(--section-alt) !important;
+  border-top: 1px solid var(--border);
 }
 
-.publication-authors {
-  /*color: #4286f4;*/
+/* H2 section titles with accent underline */
+.section h2.title.is-3 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin-bottom: 2rem;
+  padding-bottom: 0.5rem;
+  position: relative;
+}
+.section h2.title.is-3::after {
+  content: '';
+  display: block;
+  width: 56px;
+  height: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+  margin: 0.75rem auto 0;
 }
 
-.publication-video {
-    position: relative;
-    width: 100%;
-    height: 0;
-    padding-bottom: 56.25%;
-
-    overflow: hidden;
-    border-radius: 10px !important;
+/* H3 sub-titles inside Method / Results */
+.section h3.title.is-5 {
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 1.5rem;
+  margin-bottom: 1.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.95rem;
 }
 
-.publication-image-half {
-  width: 50;
-}
-
-.publication-video iframe {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-}
-
-.publication-body img {
-}
-
-.results-carousel {
+/* ---- Figures ---- */
+figure.image {
+  background: var(--card);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
   overflow: hidden;
+  margin: 0 auto;
+  transition: box-shadow 0.2s ease;
+}
+figure.image:hover { box-shadow: var(--shadow-lg); }
+figure.image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
 }
 
-.results-carousel .item {
-  margin: 5px;
+/* Caption paragraphs that follow a figure */
+figure + p {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  margin-top: 1.25rem !important;
+  line-height: 1.7;
+  max-width: 880px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ---- Abstract / body content ---- */
+.content { font-size: 1.02rem; }
+.content p {
+  line-height: 1.8;
+  color: var(--text);
+  margin-bottom: 1.1rem;
+}
+.content b { color: var(--text); font-weight: 700; }
+
+/* ---- Contributions (numbered cards) ---- */
+section .container ol {
+  padding-left: 0;
+  list-style: none;
+  counter-reset: contrib;
+  max-width: 880px;
+  margin: 0 auto;
+}
+section .container ol > li {
+  counter-increment: contrib;
+  position: relative;
+  padding: 1.1rem 1.25rem 1.1rem 3.75rem;
+  margin-bottom: 0.85rem;
+  background: var(--card);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  line-height: 1.7;
+  font-size: 1.02rem;
+  border-left: 3px solid var(--primary);
+}
+section .container ol > li::before {
+  content: counter(contrib);
+  position: absolute;
+  left: 1rem;
+  top: 1.1rem;
+  width: 2rem;
+  height: 2rem;
+  background: var(--primary);
+  color: white;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+section .container ol > li b { color: var(--primary); font-weight: 700; }
+
+/* ---- Tables ---- */
+.table-container {
+  border-radius: 12px;
   overflow: hidden;
-  border: 1px solid #bbb;
-  border-radius: 10px;
-  padding: 0;
-  font-size: 0;
+  box-shadow: var(--shadow);
+}
+.table.is-fullwidth {
+  background: var(--card);
+  margin-bottom: 0;
+}
+.table th {
+  background: var(--primary) !important;
+  color: white !important;
+  font-weight: 600;
+  border: none !important;
+  padding: 0.9rem 1.1rem !important;
+  letter-spacing: 0.02em;
+  font-size: 0.95rem;
+}
+.table td {
+  padding: 0.85rem 1.1rem !important;
+  border-bottom: 1px solid var(--border) !important;
+  vertical-align: middle;
+}
+.table.is-striped tbody tr:nth-child(even) {
+  background: rgba(44, 82, 130, 0.03) !important;
+}
+.table.is-hoverable tbody tr:hover {
+  background: var(--primary-soft) !important;
+}
+.table a {
+  color: var(--primary);
+  font-weight: 500;
+  text-decoration: none;
+}
+.table a:hover { text-decoration: underline; }
+
+/* ---- BibTeX block ---- */
+pre {
+  background: #1a202c !important;
+  color: #e2e8f0 !important;
+  padding: 1.5rem 1.75rem !important;
+  border-radius: 10px !important;
+  box-shadow: var(--shadow);
+  font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace !important;
+  font-size: 0.9rem !important;
+  line-height: 1.7 !important;
+  overflow-x: auto;
+}
+pre code {
+  background: transparent !important;
+  color: inherit !important;
+  font-family: inherit !important;
+  padding: 0 !important;
 }
 
-.results-carousel video {
-  margin: 0;
-}
-
-
-.interpolation-panel {
-  background: #f5f5f5;
-  border-radius: 10px;
-}
-
-.interpolation-panel .interpolation-image {
-  width: 100%;
-  border-radius: 5px;
-}
-
-.interpolation-video-column {
-}
-
-.interpolation-panel .slider {
-  margin: 0 !important;
-}
-
-.interpolation-panel .slider {
-  margin: 0 !important;
-}
-
-#interpolation-image-wrapper {
-  width: 100%;
-}
-#interpolation-image-wrapper img {
-  border-radius: 5px;
-}
-
-* {box-sizing: border-box;}
-
-.img-magnifier-container {
-  position:relative;
-}
-
-.img-magnifier-glass {
-  position: absolute;
-  border: 3px solid #000;
-  border-radius: 0%;
-  cursor: none;
-  /*Set the size of the magnifier glass:*/
-  width: 200px;
-  height: 200px;
-}
-
-.img-magnifier-glass_init {
-  position: absolute;
-  border: 0px solid #000;
-  border-radius: 50%;
-  cursor: none;
-  /*Set the size of the magnifier glass:*/
-  width: 0px;
-  height: 0px;
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+  .publication-title { font-size: 1.85rem !important; }
+  .section { padding: 3rem 1rem; }
+  .hero-body { padding: 3rem 1rem 2rem; }
+  .publication-links .link-block { display: inline-block; margin: 0.25rem; }
+  figure + p { padding: 0 0.5rem; }
 }
