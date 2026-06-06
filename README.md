@@ -297,5 +297,5 @@ This repository builds on top of the open-source [AnyMAC](https://github.com/) r
 
 ---
 <p align="center">
-   <a href="https://www.crcv.ucf.edu/"><img src="https://www.crcv.ucf.edu/wp-content/uploads/2018/11/crcv-logo-1.png" width="300"></a>
+   <a href="https://www.crcv.ucf.edu/"><img src="Assets/crcv_ucf.jpg" width="500"></a>
 </p>
