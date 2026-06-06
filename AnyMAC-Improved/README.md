@@ -95,14 +95,6 @@ python experiments/eval_self_consistency_routed.py \
     --num_rollouts 3 --eval_temperature 0.7 --parallelism 256
 ```
 
-## Key Fixes
-
-1. **Routing collapse** — entropy regularization + eval_temperature replaces cos_scaling=1e3 argmax
-2. **Dynamic prompts** — question-specific guidance replaces generic role descriptions
-3. **Dynamic specialist pool** — question-specific 5-7 specialist panel replaces fixed 60 specialists
-4. **Specialist names in hints** — "Cardiologist: ..." instead of "Agent 1: ..."
-5. **Prompt model flexibility** — `--prompt_model` flag to use 8B or 32B for prompt generation
-
 ## File Layout
 
 ### New files
