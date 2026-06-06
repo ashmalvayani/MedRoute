@@ -127,33 +127,41 @@ Medical Visual Question Answering on the PMC-VQA dataset (2,000 test questions, 
 - **Router:** GNN with transformer — text-only embeddings (MiniLM), or text + image embeddings (SigLIP)
 - **Training:** 300 train samples, 16 traces, lr=1e-5, max_routing=3, 1 epoch, entropy_beta=0.05
 
-### Approaches
+### Approach reported in the paper
 
-**1. Baseline — Zero-shot VLM:** Qwen3.5-9B direct inference (no routing, no specialists).
+**1. Baseline — Zero-shot VLM:** Qwen3.5-9B direct inference (no routing, no specialists). Used as the single-model baseline.
 
-**2. Caption-as-Proxy for Routing:** The GNN router is text-only, so we generate captions from medical images using a VLM and embed `caption + question` as the router input. Specialists (VLM agents) still see the actual image. Tested with three caption models:
+**2. Image Embedding Routing (SigLIP):** SigLIP (`google/siglip-so400m-patch14-384`) image embeddings (1152-dim) are concatenated with sentence-transformer text embeddings (384-dim) and used as the GNN router input. Specialists (VLM agents) see the original image at every hop.
+
+**3. L2 Normalization:** Both modality embeddings are L2-normalized before concatenation, so the larger SigLIP magnitude does not dominate the projection. Used together with #2 in the final configuration.
+
+Final reported configuration also uses dynamic specialist pool + dynamic prompts (see the *Key Strategies* section above) and entropy regularization with β=0.05.
+
+### Other approaches explored (not reported in the paper)
+
+These were tried during development but not adopted in the final paper configuration. Listed here as a record of what was attempted and why each was set aside.
+
+**A. Caption-as-Proxy for Routing:** The GNN router is text-only, so we generate captions from medical images using a VLM and embed `caption + question` as the router input. Specialists (VLM agents) still see the actual image. Tested with three caption models:
 - **9B captions** (Qwen3.5-9B) — default, same model as the agent
 - **27B captions** (Qwen3.6-27B) — better quality, richer clinical descriptions
 - **122B captions** (Qwen3.5-122B-A10B, MoE with 10B active) — more verbose but less visually precise, hurt routing
 
-**3. Panel Variations:**
+Superseded by #2 (Image Embedding Routing), which feeds visual features directly to the router.
+
+**B. Panel Variations:**
 - **Detailed panel** — specific sub-specialty titles ("Pediatric Neuroradiologist") → unstable GNN embeddings
 - **Simple panel** — broad specialty titles ("Radiologist") → stable embeddings, better accuracy. Made default.
 
-**4. Hint Ablation:**
+**C. Hint Ablation:**
 - **With hints** — specialists see previous specialists' outputs → better accuracy
 - **No hints** — specialists reason independently → worse accuracy (60.50%)
 
-**5. DM Chain-of-Thought:** Decision Maker reasons step-by-step before outputting `ANSWER: X` instead of a single letter. Forces explicit reasoning.
+**D. DM Chain-of-Thought:** Decision Maker reasons step-by-step before outputting `ANSWER: X` instead of a single letter. Forces explicit reasoning.
 
-**6. Image Embedding Routing:** Replace lossy text captions with SigLIP (google/siglip-so400m-patch14-384) image embeddings (1152-dim) concatenated with MiniLM text embeddings (384-dim) as the GNN router input. Eliminates caption generation and provides richer visual features.
+**E. Higher Entropy (β=0.15):** Increase entropy regularization to encourage specialist exploration. The router was collapsing to 83% Pulmonologist as first choice. Final paper configuration kept the standard β=0.05.
 
-**7. L2 Normalization:** SigLIP embeddings (1152-dim, magnitude 0-50+) were dominating MiniLM text embeddings (384-dim, L2-normalized ~1.0) in the projection layer. L2-normalizing both before concatenation balances text and image modalities.
+**F. Min Routing Depth 3:** Force every question to consult 3 specialists before the Decision Maker answers. Eliminates depth-0 shortcuts (58.5% accuracy).
 
-**8. Higher Entropy (beta=0.15):** Increase entropy regularization to encourage specialist exploration. The router was collapsing to 83% Pulmonologist as first choice.
+**G. Cross-Attention Fusion:** Instead of concatenating text and image embeddings, project each into the transformer hidden space separately, then use 8-head MultiheadAttention where text queries attend to image keys/values. Learns a more expressive text-image alignment than concatenation.
 
-**9. Min Routing Depth 3:** Force every question to consult 3 specialists before the Decision Maker answers. Eliminates depth-0 shortcuts (58.5% accuracy).
-
-**10. Cross-Attention Fusion:** Instead of concatenating text and image embeddings, project each into the transformer hidden space separately, then use 8-head MultiheadAttention where text queries attend to image keys/values. Learns a more expressive text-image alignment than concatenation.
-
-**11. Caption + Image Fusion:** Combine all three signals — text question embedding (384-dim) + caption embedding (384-dim) + SigLIP image embedding (1152-dim) = 1920-dim input. Hypothesis: captions provide semantic understanding while image embeddings provide raw visual features. Result: the high-dimensional input was harder to learn with 300 training samples.
+**H. Caption + Image Fusion:** Combine all three signals — text question embedding (384-dim) + caption embedding (384-dim) + SigLIP image embedding (1152-dim) = 1920-dim input. Hypothesis: captions provide semantic understanding while image embeddings provide raw visual features. Result: the high-dimensional input was harder to learn with 300 training samples.
