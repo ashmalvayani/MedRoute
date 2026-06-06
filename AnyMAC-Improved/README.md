@@ -157,17 +157,3 @@ Medical Visual Question Answering on the PMC-VQA dataset (2,000 test questions, 
 **10. Cross-Attention Fusion:** Instead of concatenating text and image embeddings, project each into the transformer hidden space separately, then use 8-head MultiheadAttention where text queries attend to image keys/values. Learns a more expressive text-image alignment than concatenation.
 
 **11. Caption + Image Fusion:** Combine all three signals — text question embedding (384-dim) + caption embedding (384-dim) + SigLIP image embedding (1152-dim) = 1920-dim input. Hypothesis: captions provide semantic understanding while image embeddings provide raw visual features. Result: the high-dimensional input was harder to learn with 300 training samples.
-
-## Cross-Dataset Comparison
-
-| Configuration | MedQA | PubMedQA |
-|---|---|---|
-| **Baselines** | | |
-| Qwen3-8B zero-shot | 59.50% | 50.00% |
-| MAM (Qwen3-8B + 32B rolegen) | 63.24% | 44.10% |
-| **MedRoute (1 epoch)** | | |
-| Static pool, no dynamic prompts | 61.51% | 41.70% |
-| Static pool + dynamic prompts | 67.63% | 53.00% |
-| Dynamic pool + prompts (seed=42) | 69.05% | 53.70% |
-| Dynamic pool + prompts (seed=99) | **71.48%** | **55.10%** |
-| **Improvement over zero-shot** | **+11.98%** | **+5.10%** |
