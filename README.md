@@ -6,7 +6,7 @@
    <a href="https://github.com/ashmalvayani/MedRoute/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-CC--BY--NC%204.0-blue" alt="license"></a>
 </p>
 
-[Ashmal Vayani](https://scholar.google.com/citations?user=K4KF1SwAAAAJ&hl=en&oi=ao)\*, [Parth Parag Kulkarni](https://scholar.google.com/citations?user=OHC7c90AAAAJ&hl=en)\*, [Joseph Fioresi](https://scholar.google.com/), [Song Wang](https://scholar.google.com/), [Mubarak Shah](https://scholar.google.com/citations?user=p8gsO3gAAAAJ&hl=en&oi=ao)
+[Ashmal Vayani](https://ashmalvayani.github.io/)\*, [Parth Parag Kulkarni](https://scholar.google.com/citations?user=OHC7c90AAAAJ&hl=en)\*, [Joseph Fioresi](https://scholar.google.com/), [Song Wang](https://scholar.google.com/), [Mubarak Shah](https://scholar.google.com/citations?user=p8gsO3gAAAAJ&hl=en&oi=ao)
 ###### \* Equal Contribution
 
 #### University of Central Florida
