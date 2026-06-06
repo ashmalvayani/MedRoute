@@ -293,7 +293,7 @@ If you find our work and this repository useful, please consider giving the repo
 
 ## 🙏 Acknowledgements
 
-This repository builds on top of the open-source [AnyMAC](https://github.com/) routing framework and draws inspiration from the [MAM](https://aclanthology.org/2025.findings-acl.1298/) modular multi-agent medical framework. We thank the authors for releasing their code.
+This repository builds on top of the open-source [AnyMAC](https://github.com/) routing framework. We thank the authors for releasing their code.
 
 ---
 <p align="center">
