@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="MedRoute: RL-Based Dynamic Specialist Routing in Multi-Agent Medical Diagnosis">
+  <meta name="keywords" content="MedRoute, Multi-Agent, Medical Diagnosis, GRPO, LLM, LMM, RL, Routing">
+  <title>MedRoute: Dynamic Specialist Routing for Multi-Agent Medical Diagnosis</title>
+
+  <meta property="og:title" content="MedRoute: Dynamic Specialist Routing for Multi-Agent Medical Diagnosis"/>
+  <meta property="og:description" content="A reinforcement-learning framework that formulates multi-agent medical diagnosis as a learned consultation policy."/>
+  <meta property="og:image" content="static/images/teaser.png"/>
+  <meta property="og:url" content="https://ashmalvayani.github.io/MedRoute/"/>
+  <meta property="og:type" content="website"/>
+
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
+  <link rel="stylesheet" href="static/css/bulma.min.css">
+  <link rel="stylesheet" href="static/css/fontawesome.all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="static/css/index.css">
+</head>
+
+<body>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-body">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <h1 class="title is-2 publication-title">MedRoute: Dynamic Specialist Routing for Multi-Agent Medical Diagnosis</h1>
+
+          <div class="is-size-5 publication-authors">
+            <span class="author-block"><a href="https://scholar.google.com/citations?user=K4KF1SwAAAAJ&hl=en&oi=ao">Ashmal Vayani</a>,</span>
+            <span class="author-block"><a href="https://scholar.google.com/citations?user=OHC7c90AAAAJ&hl=en">Parth Parag Kulkarni</a>,</span>
+            <span class="author-block"><a href="#">Joseph Fioresi</a>,</span>
+            <span class="author-block"><a href="#">Song Wang</a>,</span>
+            <span class="author-block"><a href="https://scholar.google.com/citations?user=p8gsO3gAAAAJ&hl=en&oi=ao">Mubarak Shah</a></span>
+          </div>
+
+          <div class="is-size-5 publication-authors" style="margin-top: 6px;">
+            <span class="author-block">Center for Research in Computer Vision, University of Central Florida</span>
+          </div>
+
+          <div class="column has-text-centered">
+            <div class="publication-links">
+              <span class="link-block">
+                <a href="https://arxiv.org/abs/2604.06180" target="_blank" class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon"><i class="ai ai-arxiv"></i></span>
+                  <span>arXiv</span>
+                </a>
+              </span>
+              <span class="link-block">
+                <a href="https://github.com/ashmalvayani/MedRoute" target="_blank" class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon"><i class="fab fa-github"></i></span>
+                  <span>Code</span>
+                </a>
+              </span>
+              <span class="link-block">
+                <a href="https://github.com/ashmalvayani/MedRoute#-citation" target="_blank" class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon"><i class="fas fa-quote-right"></i></span>
+                  <span>BibTeX</span>
+                </a>
+              </span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TEASER -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <figure class="image">
+      <img src="static/images/teaser.png" alt="MedRoute teaser">
+    </figure>
+    <p class="has-text-centered" style="margin-top: 10px;">
+      <b>History-conditioned specialist routing for medical diagnosis.</b>
+      The same knee X-ray leads to different outcomes depending on how specialist consultations are coordinated. MedRoute uses accumulated diagnostic history to select the next specialist and construct a coherent consultation trajectory, correctly predicting <i>osteomyelitis</i>.
+    </p>
+  </div>
+</section>
+
+<!-- ABSTRACT -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Abstract</h2>
+        <div class="content has-text-justified">
+          <p>
+            Large Multimodal Models (LMMs) have shown promising diagnostic ability in medical reasoning, yet they are typically used as monolithic generalists or as agents assigned to static clinical roles. Existing multi-agent medical systems improve specialization through fixed expert panels, role-based discussion, or external knowledge augmentation, but their coordination is often weakly adaptive and not directly optimized for final diagnostic correctness.
+          </p>
+          <p>
+            We propose <b>MedRoute</b>, a reinforcement-learning-based framework that formulates multi-agent medical diagnosis as a learned consultation policy. For each case, MedRoute constructs a compact, case-conditioned specialist pool and instantiates specialists with targeted clinical guidance. A General Practitioner (GP) then dynamically selects specialists conditioned on the input and accumulated diagnostic history, allowing each consultation to inform the next rather than producing individual expert opinions. To address the lack of step-wise supervision signals, we train the router with an outcome-level policy-gradient objective using group-relative advantage normalization, assigning credit to consultation trajectories based on final diagnostic correctness. A Moderator synthesizes the resulting diagnostic trajectory into the final prediction.
+          </p>
+          <p>
+            Across three text-only and five image-text medical QA benchmarks, MedRoute consistently outperforms both single-model and multi-agent baselines, with gains of up to <b>+13.1%</b> on text-only and <b>+30.4%</b> on image-text over the strongest single-model baseline.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CONTRIBUTIONS -->
+<section class="section" style="padding-top: 0;">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column">
+        <h2 class="title is-3 has-text-centered">Contributions</h2>
+        <ol style="font-size: 1.05em; line-height: 1.7em;">
+          <li><b>Adaptive multi-agent framework.</b> A novel framework that formulates multimodal medical diagnosis as an outcome-optimized consultation routing problem; the system learns the best sequence of specialist consultations conditioned on the evolving diagnostic history.</li>
+          <li><b>General Practitioner router.</b> A learned router that adaptively conditions each routing decision on the input case and accumulated diagnostic history, so specialist opinions guide subsequent consultations rather than being generated independently.</li>
+          <li><b>Outcome-level policy gradient training.</b> The router is trained from final diagnostic outcomes using Group-Relative Policy Optimization (GRPO), with substantial gains across eight medical QA benchmarks (three text-only, five image-text).</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- METHOD -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3 has-text-centered">Method</h2>
+
+    <h3 class="title is-5 has-text-centered" style="margin-top: 20px;">Framework Overview</h3>
+    <figure class="image">
+      <img src="static/images/architecture.png" alt="MedRoute architecture">
+    </figure>
+    <p class="has-text-justified" style="margin-top: 10px;">
+      For each case, a case-conditioned specialist pool is generated and specialists are instantiated with targeted clinical guidance. The General Practitioner (GP) router dynamically selects the next specialist conditioned on the input case and the accumulated diagnostic history. After up to <i>K</i> consultations, the Moderator synthesizes the diagnostic trajectory into the final prediction.
+    </p>
+
+    <h3 class="title is-5 has-text-centered" style="margin-top: 40px;">General Practitioner Router</h3>
+    <figure class="image">
+      <img src="static/images/router.png" alt="GP router architecture" style="max-width: 800px; margin: 0 auto;">
+    </figure>
+    <p class="has-text-justified" style="margin-top: 10px;">
+      A lightweight GNN-conditioned transformer encodes the case representation and the current diagnostic history into a routing distribution over the case-conditioned specialist pool. Trained end-to-end with GRPO, the router is supervised by the final diagnostic outcome of complete consultation trajectories.
+    </p>
+  </div>
+</section>
+
+<!-- DATASETS -->
+<section class="section" style="background-color: #fafafa;">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3 has-text-centered">Benchmarks</h2>
+    <p class="has-text-centered" style="margin-bottom: 25px;">
+      MedRoute is evaluated across <b>eight</b> medical QA benchmarks — three text-only and five image-text.
+    </p>
+    <div class="table-container">
+      <table class="table is-fullwidth is-hoverable is-striped">
+        <thead>
+          <tr>
+            <th>Dataset</th>
+            <th>Modality</th>
+            <th>Task</th>
+            <th>Test set</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><a href="https://github.com/jind11/MedQA" target="_blank">MedQA</a></td><td>text</td><td>5-option USMLE-style MCQ</td><td>1,273</td></tr>
+          <tr><td><a href="https://github.com/medmcqa/medmcqa" target="_blank">MedMCQA</a></td><td>text</td><td>4-option MCQ (Indian medical entrance)</td><td>2,816</td></tr>
+          <tr><td><a href="https://pubmedqa.github.io/" target="_blank">PubMedQA</a></td><td>text</td><td>yes/no/maybe QA on PubMed abstracts</td><td>1,000</td></tr>
+          <tr><td><a href="https://xiaoman-zhang.github.io/PMC-VQA/" target="_blank">PMC-VQA</a></td><td>image-text</td><td>4-option VQA on PubMed figures</td><td>2,000</td></tr>
+          <tr><td><a href="https://github.com/UCSD-AI4H/PathVQA" target="_blank">PathVQA</a></td><td>image-text</td><td>open-ended pathology VQA</td><td>6,719</td></tr>
+          <tr><td><a href="https://nihcc.app.box.com/v/DeepLesion" target="_blank">DeepLesion</a></td><td>image-text</td><td>NIH lesion identification</td><td>4,736</td></tr>
+          <tr><td><a href="https://nihcc.app.box.com/v/ChestXray-NIHCC" target="_blank">ChestX-ray8</a></td><td>image-text</td><td>NIH chest X-ray classification</td><td>—</td></tr>
+          <tr><td><a href="https://www.kaggle.com/datasets/sartajbhuvaji/brain-tumor-classification-mri" target="_blank">BTMRI</a></td><td>image-text</td><td>brain tumor MRI classification</td><td>394</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- RESULTS -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3 has-text-centered">Results</h2>
+
+    <h3 class="title is-5 has-text-centered" style="margin-top: 20px;">Text-only benchmarks</h3>
+    <figure class="image" style="max-width: 700px; margin: 0 auto;">
+      <img src="static/images/text_results.png" alt="Text benchmark results">
+    </figure>
+    <p class="has-text-justified" style="margin-top: 10px;">
+      MedRoute outperforms the strongest single-model baseline (Qwen3-8B) and the multi-agent baseline MAM on MedQA, MedMCQA, and PubMedQA. Gains reach <b>+13.1%</b> on MedQA over the single-model baseline.
+    </p>
+
+    <h3 class="title is-5 has-text-centered" style="margin-top: 40px;">Image-text benchmarks</h3>
+    <figure class="image">
+      <img src="static/images/baselines.png" alt="Image-text benchmark results">
+    </figure>
+    <p class="has-text-justified" style="margin-top: 10px;">
+      MedRoute improves over single-model and multi-agent baselines across five image-text benchmarks (PMC-VQA, PathVQA, DeepLesion, ChestX-ray8, BTMRI). Gains reach <b>+30.4%</b> on BTMRI over the strongest single-model baseline.
+    </p>
+  </div>
+</section>
+
+<!-- QUALITATIVE -->
+<section class="section" style="background-color: #fafafa;">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3 has-text-centered">Qualitative Examples</h2>
+    <figure class="image" style="margin-top: 20px;">
+      <img src="static/images/qualitative.png" alt="Qualitative examples">
+    </figure>
+    <p class="has-text-justified" style="margin-top: 10px;">
+      Across diverse medical cases, MedRoute selects a coherent sequence of specialists conditioned on the diagnostic history. Each specialist's reasoning shapes the next routing decision, and the Moderator integrates the trajectory into the final answer.
+    </p>
+  </div>
+</section>
+
+<!-- CITATION -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3 has-text-centered">Citation</h2>
+    <p class="has-text-centered" style="margin-bottom: 12px;">
+      If you find our work useful, please give the repo a ⭐ and cite our paper:
+    </p>
+<pre style="background:#1f2430; color:#e6e6e6; padding:18px; border-radius:6px; overflow-x:auto;"><code>@article{vayani2026medroute,
+  title  = {MedRoute: RL-Based Dynamic Specialist Routing in Multi-Agent Medical Diagnosis},
+  author = {Vayani, Ashmal and Kulkarni, Parth Parag and Fioresi, Joseph and Wang, Song and Shah, Mubarak},
+  journal = {arXiv preprint arXiv:2604.06180},
+  year   = {2026}
+}</code></pre>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer" style="padding: 2rem 1.5rem;">
+  <div class="container has-text-centered">
+    <p>
+      Page template adapted from <a href="https://ucf-crcv.github.io/GAEA/" target="_blank">GAEA</a> and <a href="https://nerfies.github.io/" target="_blank">Nerfies</a>.
+      <br>
+      <span style="font-size: 0.9em; color: #777;">Hosted on GitHub Pages from the <a href="https://github.com/ashmalvayani/MedRoute/tree/gh-pages" target="_blank">gh-pages</a> branch.</span>
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
