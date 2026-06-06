@@ -95,15 +95,15 @@ python experiments/eval_self_consistency_routed.py \
     --num_rollouts 3 --eval_temperature 0.7 --parallelism 256
 ```
 
-## PMC-VQA (Vision)
+## Vision Datasets
 
-Medical Visual Question Answering on the PMC-VQA dataset (2,000 test questions, 4-option MCQ). The challenge: the GNN router is text-only, but questions require visual understanding of medical images.
+The vision pipeline covers the five image-text benchmarks supported by MedRoute: **PMC-VQA**, **PathVQA**, **DeepLesion**, **ChestX-ray8**, and **BTMRI**. The shared challenge is that the GNN router is text-only, while the questions require visual understanding of medical images.
 
 ### Pipeline Architecture
 
 - **Agent Model:** Qwen3.5-9B (VLM) — specialists see the actual image + question + options
 - **Pool/Prompt/Judge Model:** Qwen3.6-27B (VLM) — generates specialist panels and dynamic prompts, sees the image
-- **Router:** GNN with transformer — text-only embeddings (MiniLM), or text + image embeddings (SigLIP)
+- **Router:** GNN with transformer — text + image embeddings (sentence-transformer + SigLIP) as input
 - **Training:** 300 train samples, 16 traces, lr=1e-5, max_routing=3, 1 epoch, entropy_beta=0.05
 
 ### Approach reported in the paper
