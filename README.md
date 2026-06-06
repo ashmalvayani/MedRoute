@@ -266,10 +266,12 @@ MedRoute/
 │   │   └── ablations/      # Vision-encoder + routing-policy ablations
 │   ├── requirements.txt    # Python dependencies
 │   └── .env.template       # Environment configuration template
-├── MAM/                    # Modular Multi-Agent reference work (separate paper)
+├── MAM/                    # MAM baseline (modified copy — see note below)
 ├── Assets/                 # README figures
 └── README.md
 ```
+
+> **Note on `MAM/`:** This is our local copy of the [MAM](https://aclanthology.org/2025.findings-acl.1298/) modular multi-agent medical framework, modified to run with higher concurrency and faster vLLM-based evaluation using the same judge model as MedRoute. We use it as the multi-agent baseline reported in the paper. The original repo is unchanged on the authors' side; bundling our patched copy here makes the baseline numbers reproducible end-to-end.
 
 <hr />
 
