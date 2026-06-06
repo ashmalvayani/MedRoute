@@ -95,27 +95,6 @@ python experiments/eval_self_consistency_routed.py \
     --num_rollouts 3 --eval_temperature 0.7 --parallelism 256
 ```
 
-## File Layout
-
-### New files
-- `GDesigner/prompt/dynamic_prompt.py` — Dynamic prompt + panel generator
-- `GDesigner/reward/__init__.py` + `partial_credit.py` — Partial credit reward (not used in best config)
-- `GDesigner/hints/__init__.py` + `structured_hints.py` — Structured hint parser (not used in best config)
-- `scripts/train_improved_medqa.sh` — Training script (dynamic prompts)
-- `scripts/train_dynamic_pool.sh` — Training script (dynamic pool + prompts, 8B base)
-- `scripts/train_dynamic_pool_32b.sh` — Training script (dynamic pool + prompts, 32B consistent)
-- `experiments/eval_self_consistency_routed.py` — SC evaluation
-- `experiments/smoke_test_dynamic_pool.py` — Panel generation smoke test
-
-### Modified files
-- `GDesigner/agents/analyze_agent.py` — Dynamic prompt integration + prompt_model support + dynamic_description
-- `GDesigner/graph/graph.py` — Entropy regularization, eval_temperature, dynamic pool, specialist names in hints
-- `GDesigner/prompt/medqa_prompt_set.py` — Graceful handling of unknown roles (dynamic pool)
-- `experiments/run_medqa.py` — New CLI flags (`--dynamic_prompts`, `--dynamic_pool`, `--prompt_model`)
-- `experiments/train_medqa.py` — Dynamic pool gradient replay support
-
----
-
 ## PMC-VQA (Vision)
 
 Medical Visual Question Answering on the PMC-VQA dataset (2,000 test questions, 4-option MCQ). The challenge: the GNN router is text-only, but questions require visual understanding of medical images.
